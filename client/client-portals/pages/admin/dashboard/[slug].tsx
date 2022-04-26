@@ -8,11 +8,11 @@ import {
 } from "services/api";
 import { successToast, alertToast } from "utils/functions/toast";
 import { Layout } from "components/shared";
-import Link from "next/link";
 import { MaintainersProps } from "utils/interfaces";
 import { CSSLoader } from "@/shared/index";
 import { CardGithub, Tick, Loading, Cross } from "@/icons/index";
 import { Button } from "@/shared/index";
+import AcademicYear from "components/admin/dashboard/academic-year";
 
 const MaintainerPage = () => {
   const [maintainerData, setMaintainerData] = useState<MaintainersProps[]>([]);
@@ -25,6 +25,9 @@ const MaintainerPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [loading2, setLoading2] = useState<boolean>(true);
   const [rejectLoading, setRejectLoading] = useState<boolean>(false);
+  const [open, setOpen] = useState<boolean>(false);
+  const [year, setYear] = useState<string>("");
+  const [isProjectApproved, setIsProjectApproved] = useState<boolean>(false);
 
   const router = useRouter();
   const authContext = useContext(AuthContext);
@@ -70,6 +73,7 @@ const MaintainerPage = () => {
       setMaintainerData(res.maintainer.maintainer);
       setProjectName(res.project.project_name);
       setProjectId(res.project._id);
+      setIsProjectApproved(res.project.is_admin_approved);
       setLoading2(false);
     } else {
       setLoading2(false);
@@ -109,6 +113,11 @@ const MaintainerPage = () => {
               <span className="font-bold">Email: </span>
               {person.email.split("@")[0]}
               <br className="sm:hidden" />@{person.email.split("@")[1]}
+            </h2>
+            <h2 className="text-xl font-medium mb-3">
+              <span className="font-bold">SRM Email: </span>
+              {person.srm_email.split("@")[0]}
+              <br className="sm:hidden" />@{person.srm_email.split("@")[1]}
             </h2>
             <div className="cursor-pointer hover:text-gray-800 flex text-xl font-medium mb-3">
               <span className="font-bold">Github ID: </span>
@@ -186,6 +195,25 @@ const MaintainerPage = () => {
           </div>
         ))}
       </div>
+      {!isProjectApproved && (
+        <>
+          <Button
+            onClick={() => {
+              setOpen(true);
+            }}
+          >
+            Approve project
+          </Button>
+
+          <AcademicYear
+            projectId={projectId}
+            year={year}
+            close={() => setOpen(false)}
+            isOpen={open}
+            isOpenHook={setOpen}
+          />
+        </>
+      )}
     </Layout>
   );
 };

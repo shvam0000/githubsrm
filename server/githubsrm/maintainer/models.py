@@ -1,27 +1,26 @@
-from .errors import (
-    ContributorNotFoundError,
-    ContributorApprovedError,
-    InvalidMaintainerCredentialsError,
-    ProjectErrors,
-    MaintainerNotFoundError,
-    AuthenticationErrors,
-)
+import binascii
+import hashlib
+import os
 from threading import Thread
-from typing import Iterable, Dict, Any
-import pymongo
-from django.conf import settings
+from typing import Any, Dict, Iterable
+
 from administrator import jwt_keys
+from core.aws import service
+from core.models import BaseModel
+
+from .errors import (
+    AuthenticationErrors,
+    ContributorApprovedError,
+    ContributorNotFoundError,
+    InvalidMaintainerCredentialsError,
+    MaintainerNotFoundError,
+    ProjectErrors,
+)
 
 
-import hashlib, binascii, os
-
-from core import service
-
-
-class Entry:
+class Entry(BaseModel):
     def __init__(self) -> None:
-        client = pymongo.MongoClient(settings.DATABASE["mongo_uri"])
-        self.db = client[settings.DATABASE["db"]]
+        super().__init__()
 
     def hash_password(self, password: str) -> str:
         """Hashes password using salted password hashing (SHA512 & PBKDF_HMAC2)
@@ -58,7 +57,7 @@ class Entry:
 
             if pwd_hash == dbpwd:
                 return value
-        raise InvalidMaintainerCredentialsError("Invalid credentials")
+        raise InvalidMaintainerCredentialsError()
 
     def _approve_contributor(self, contributor: Dict[str, str]):
         """Trigger lambda for contributor addition
@@ -75,12 +74,12 @@ class Entry:
         }
         response = service.lambda_(func="githubcommunitysrm-v2", payload=submission)
 
-        if response["success"] == False:
+        if not response["success"]:
             service.sns(
                 payload={
-                    "message": f"Lambda failing on contirbutor approval contributor_id -> {contributor['_id']} \
+                    "message": f"Lambda failing on contributor approval contributor_id -> {contributor['_id']} \
                          Error: {response}",
-                    "subject": "[LAMBDA-FAILING]",
+                    "subject": "[LAMBDA-ERROR] githubcommunitysrm-v2 returned False",
                 }
             )
         else:
@@ -108,7 +107,9 @@ class Entry:
             if contributor.get("is_maintainer_approved") and contributor.get(
                 "is_admin_approved"
             ):
-                raise ContributorApprovedError("Contributor approved")
+                raise ContributorApprovedError(
+                    detail={"error": "Contributor already approved"}
+                )
             Thread(
                 target=self._approve_contributor, kwargs={"contributor": contributor}
             ).start()
@@ -117,7 +118,7 @@ class Entry:
                 update={"$addToSet": {"contributor_id": contributor_id}},
             )
             return {**project_doc, **contributor}
-        raise ContributorNotFoundError("No contributor found")
+        raise ContributorNotFoundError(detail={"error": "Contributor Not Found!"})
 
     def find_Maintainer_credentials_with_email(self, email: str) -> Dict[str, Any]:
         """To find maintainer with email
@@ -165,7 +166,7 @@ class Entry:
             Dict[str, Any]
         """
         if not len(project_ids):
-            raise ProjectErrors("Projects not found")
+            raise ProjectErrors(detail={"error": "Projects not found"})
         contributor = self.db.contributor.find_one_and_delete(
             {
                 "_id": identifier,
@@ -209,10 +210,10 @@ class Entry:
         decode = jwt_keys.verify_key(key=key)
 
         if not decode:
-            raise AuthenticationErrors("Not allowed to reset")
+            raise AuthenticationErrors(detail={"error": "Not allowed to reset"})
 
         if "email" not in decode:
-            raise AuthenticationErrors("Email not found invalid JWT")
+            raise AuthenticationErrors(detail={"error": "Email not found invalid JWT"})
 
         maintainer = self.db.maintainer_credentials.find_one_and_update(
             {"$and": [{"email": decode.get("email")}, {"reset": True}]},
@@ -226,7 +227,9 @@ class Entry:
 
         if maintainer:
             return True
-        raise MaintainerNotFoundError("No maintainer found/not allowed to reset")
+        raise MaintainerNotFoundError(
+            detail={"error": "No maintainer found/not allowed to reset"}
+        )
 
     def projects_from_email(self, email: str) -> list:
         """Get all projects from email

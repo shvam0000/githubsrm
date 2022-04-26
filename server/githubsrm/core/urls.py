@@ -2,17 +2,18 @@
 URL configurations for GitHubSRM
 
 """
-from django.urls import path, include, re_path
+from administrator.views import refresh, verify
 from apis.open_views import catch_all
-from administrator.views import RefreshRoute
-from administrator.views import Verification
+from django.urls import include, path, re_path
+
+from .views import health_check
 
 urlpatterns = [
-    path('api/', include('apis.urls')),
-    path('admin/', include('administrator.urls')),
-    path('maintainer/', include('maintainer.urls')),
-    path("refresh-token", RefreshRoute.as_view()),
-    path("me", Verification.as_view()),
-    re_path('^(?P<path>.*)\/?$', catch_all),
-
+    path("api/", include("apis.urls")),
+    path("admin/", include("administrator.urls")),
+    path("maintainer/", include("maintainer.urls")),
+    path("refresh-token", refresh),
+    path("me", verify),
+    path("api/healthcheck", health_check),
+    re_path("^(?P<path>.*)\/?$", catch_all),
 ]

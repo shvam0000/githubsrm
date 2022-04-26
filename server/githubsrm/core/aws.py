@@ -4,7 +4,16 @@ from typing import Any, Dict, List, TypedDict
 
 import boto3
 
+from .log_utils.log import get_logger
+from .settings import TRIGGER_AWS
 from .utils import get_email_content
+
+# Set logging level to critical since breaking aws service breaks everything :).
+logger = get_logger(
+    "aws.service.errors",
+    filename="AWSError.log",
+    level=30,
+)
 
 
 class SNSpayload(TypedDict):
@@ -19,7 +28,7 @@ class BotoService:
         Args:
             payload (SNSpayload): SNSpayload
         """
-        if os.getenv("SENDEMAIL"):
+        if not TRIGGER_AWS:
             return True
 
         client = boto3.client("sns", region_name="ap-south-1")
@@ -31,8 +40,8 @@ class BotoService:
                 Subject=payload["subject"],
             )
         except Exception as e:
-            print(e)
-            return
+            logger.critical("SNS Failed!")
+            logger.exception(e)
 
     def wrapper_email(self, role: str, data: Dict[str, Any], send_all=False) -> bool:
         """Send Emails to contributors and maintainers
@@ -43,7 +52,7 @@ class BotoService:
         Returns:
             bool
         """
-        if os.getenv("SENDEMAIL"):
+        if not TRIGGER_AWS:
             return True
         client = boto3.client("sesv2", region_name="ap-south-1")
 
@@ -66,20 +75,23 @@ class BotoService:
             return True
 
         except Exception as e:
-            print("EMAIL FAILED", e)
-            return False
+            logger.critical("Email Failed!")
+            logger.exception(e)
 
     def lambda_(self, func: str, payload: Dict) -> Dict:
         """[Lambda wrapper for AWS]
 
         Args:
-            func (str): [Func ARN or name of fucntion]
+            func (str): [Func ARN or name of function]
             payload (Dict): [Payload to pass to function]
 
         Returns:
-            Dict: [fucntion json response]
+            Dict: [function json response]
         """
-        if os.getenv("SENDEMAIL"):
+        res = None
+
+        if not TRIGGER_AWS:
+            # Test return!
             return {
                 "success": True,
                 "team-slug": "team-slug-123",
@@ -90,10 +102,16 @@ class BotoService:
         try:
             res = client.invoke(FunctionName=func, Payload=json.dumps(payload))
         except Exception as e:
-            print(f"AWS failed with {e}")
-            return {"error": e}
+            logger.critical("lambda failed during invocation!")
+            logger.exception(e)
 
-        if "Payload" in res and hasattr(res["Payload"], "read"):
+        if res and "Payload" in res and hasattr(res["Payload"], "read"):
             return json.loads(res["Payload"].read())
         else:
-            return {"error": "Lambda response was not expected"}
+            logger.critical(
+                f"lambda returned without payload!\n Returned Value: {res}"
+            )
+            return {"error": "lambda failed!"}
+
+
+service = BotoService()

@@ -18,6 +18,7 @@ const ProjectApplications = () => {
   const [open, setOpen] = useState<boolean>(false);
   const [projId, setProjId] = useState<string>("");
   const [year, setYear] = useState<string>("");
+  const [lastPage, setLastPage] = useState<number>(1);
 
   const headings = [
     "Maintainers",
@@ -29,7 +30,6 @@ const ProjectApplications = () => {
     "Project Description",
     "Project Approval",
   ];
-
   const _getProjectApplications = async () => {
     const res = await getAdminProjectApplications(pageNo);
     if (res) {
@@ -37,6 +37,7 @@ const ProjectApplications = () => {
       setTableDataProjects(res.records);
       sethasNextPage(res.hasNextPage);
       sethasPrevPage(res.hasPreviousPage);
+      setLastPage(res.lastPage);
       setLoading(false);
     } else {
       setLoading(false);
@@ -76,8 +77,8 @@ const ProjectApplications = () => {
                 <td className="p-3">
                   <div className="flex align-items-center">
                     <Link href={`/admin/dashboard/${data._id}`}>
-                      <div className="cursor-pointer rounded-lg bg-gray-700 p-3 hover:bg-gray-900 ">
-                        Open
+                      <div className="cursor-pointer rounded-lg bg-gray-700 p-3 hover:bg-gray-900 text-center">
+                        Approve Maintainers
                       </div>
                     </Link>
                   </div>
@@ -152,6 +153,7 @@ const ProjectApplications = () => {
             hasNextPage={hasNextPage}
             hasPrevPage={hasPrevPage}
             pageNo={pageNo}
+            lastPage={lastPage}
             setPageNo={setPageNo}
           />
         </div>
@@ -161,6 +163,7 @@ const ProjectApplications = () => {
         year={year}
         close={() => setOpen(false)}
         isOpen={open}
+        isOpenHook={setOpen}
       />
     </Layout>
   ) : (
